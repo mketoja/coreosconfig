@@ -1,0 +1,86 @@
+variant: fcos
+version: 1.6.0
+passwd:
+  users:
+    - name: stephen
+      ssh_authorized_keys:
+        - ssh-ed25519 AAaac3NzaC1lZDI1NTE5AAAAIAfP6CfRonOUPTi6gcKUkBzW0R0r0kR+8KI5SJvU45Xv kaledriina@gmail.com
+      password_hash: $y$j9T$7WXKtGjMh9ngYFBppdzrG.$pXa.qv4ninBJ10VVpjxhS1bZcleEe8H5/fg7g0MtnP2
+      uid: 816 
+      groups: 
+            - sudo
+            - docker
+            - wheel
+      shell: /bin/bash
+
+storage:
+  disks: 
+    - device: /dev/vda
+      wipe_table: true
+      partitions: 
+         - number: 1
+           label: core
+           size_mib: 0
+         - number: 2
+           label: swap
+           size_mib: 1000
+  filesystems:
+    - device: /dev/disk/by-partlabel/swap
+      format: swap
+      wipe_filesystem: true
+      with_mount_unit: true
+    - device: /dev/disk/by-partlabel/core
+      format: btrfs
+      wipe_filesystem: true
+                
+
+  files: 
+    - path: /etc/hostname
+      mode: 0644
+      contents: 
+        inline: losthope
+    - path: /etc/vconsole.conf
+      mode: 0644
+      contents:
+        inline: KEYMAP=fis
+  directories:
+    - path: /etc/ucore-autorebase
+      mode: 0754
+systemd:
+  units:
+    - name: ucore-unsigned-autorebase.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=uCore autorebase to unsigned OCI and reboot
+        ConditionPathExists=!/etc/ucore-autorebase/unverified
+        ConditionPathExists=!/etc/ucore-autorebase/signed
+        After=network-online.target
+        Wants=network-online.target
+        [Service]
+        Type=oneshot
+        StandardOutput=journal+console
+        ExecStart=/usr/bin/rpm-ostree rebase --bypass-driver ostree-unverified-registry:ghcr.io/ublue-os/ucore:stable
+        ExecStart=/usr/bin/touch /etc/ucore-autorebase/unverified
+        ExecStart=/usr/bin/systemctl disable ucore-unsigned-autorebase.service
+        ExecStart=/usr/bin/systemctl reboot
+        [Install]
+        WantedBy=multi-user.target
+    - name: ucore-signed-autorebase.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=uCore autorebase to signed OCI and reboot
+        ConditionPathExists=/etc/ucore-autorebase/unverified
+        ConditionPathExists=!/etc/ucore-autorebase/signed
+        After=network-online.target
+        Wants=network-online.target
+        [Service]
+        Type=oneshot
+        StandardOutput=journal+console
+        ExecStart=/usr/bin/rpm-ostree rebase --bypass-driver ostree-image-signed:docker://ghcr.io/ublue-os/ucore:stable
+        ExecStart=/usr/bin/touch /etc/ucore-autorebase/signed
+        ExecStart=/usr/bin/systemctl disable ucore-signed-autorebase.service
+        ExecStart=/usr/bin/systemctl reboot
+        [Install]
+        WantedBy=multi-user.target
